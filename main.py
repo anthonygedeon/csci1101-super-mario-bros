@@ -13,11 +13,13 @@ class Game:
 
     camera_pos = [0, 0]
 
-    def init(self) -> None:
+    def __init__(self) -> None:
         pygame.init()
         pygame.display.set_caption("Super Mario Bros.")
+        self.update()
+        pygame.quit()
 
-    def run(self) -> None:
+    def update(self) -> None:
         world = pygame.surface.Surface((3360, 220))
         while self.running:
             self.screen.fill("#000000")
@@ -29,13 +31,13 @@ class Game:
             keys = pygame.key.get_pressed()
 
             if keys[pygame.K_LEFT]:
-                self.camera_pos[0] -= 10
-            if keys[pygame.K_RIGHT]:
                 self.camera_pos[0] += 10
+            if keys[pygame.K_RIGHT]:
+                self.camera_pos[0] -= 10
             if keys[pygame.K_UP]:
-                self.camera_pos[1] -= 10
-            if keys[pygame.K_DOWN]:
                 self.camera_pos[1] += 10
+            if keys[pygame.K_DOWN]:
+                self.camera_pos[1] -= 10
 
             for layer in self.tiled_map.layers:
                 if layer.name in [
@@ -62,15 +64,8 @@ class Game:
             pygame.display.update()
             self.clock.tick(60)
 
-    def game_over(self) -> None:
-        pygame.quit()
+    def draw(self) -> None:
+        pass
 
 
-def main() -> None:
-    game = Game()
-    game.init()
-    game.run()
-
-
-if __name__ == "__main__":
-    main()
+Game()
