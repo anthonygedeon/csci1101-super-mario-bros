@@ -15,15 +15,23 @@ class Scene:
     pass
 
 
-class GameMenuScene(Scene):
+class GameMenu(Scene):
     pass
 
 
-class GameOverScene(Scene):
+class GameOver(Scene):
     pass
 
 
 class Enemy(pygame.sprite.Sprite):
+    pass
+
+
+class MysteryBlock(pygame.sprite.Sprite):
+    pass
+
+
+class BrickBlock(pygame.sprite.Sprite):
     pass
 
 
@@ -51,31 +59,29 @@ class Koopa(Enemy):
 
 
 class Camera(pygame.sprite.Group):
-
     width, height = (420, 220)
 
     def __init__(self) -> None:
         self.position = Vector2(0, 0)
         self.viewport = pygame.Rect(self.position, (self.width, self.height))
 
-    def todo(self) -> None:
-        # self.camera_pos.x = max(0, self.mario.position.x - (420//2))
-        #
-        # camera_rect = pygame.Rect(abs(self.camera_pos.x), 0, 420, 220)
-        # camera_rect = camera_rect.clamp(self.world._surface.get_rect())
-        #
-        # display = self.worldi._surface.subsurface(camera_rect)
-        # zoomed_camera = pygame.transform.scale(
-        #     display.convert_alpha(),
-        #     (self.screen.get_width(), self.screen.get_height()),
-        # )
-        pass
+    def follow_target(self, target):
+        half_width = self.width // 2
 
-    def zoom(self) -> None:
-        pass
+        if target.position.x > self.position.x + half_width:
+            # Move the camera to follow Mario
+            self.position.x = target.position.x - half_width
 
-    def follow_target(self):
-        pass
+        # Update the viewport's position
+        self.viewport.x = max(0, int(self.position.x))
+
+    def zoom(self, surface) -> pygame.Surface:
+        self.viewport = self.viewport.clamp(surface.get_rect())
+        display = surface.subsurface(self.viewport)
+        return pygame.transform.scale(
+            display.convert_alpha(),
+            (constants.SCREEN_WIDTH, constants.SCREEN_HEIGHT),
+        )
 
 
 class Animation:
@@ -204,7 +210,7 @@ class Mario(pygame.sprite.Sprite):
 
         self.hitbox.topleft = (int(self.position.x), int(self.position.y))
 
-        print(self.velocity)
+        # print(self.velocity)
 
 
 class World:
@@ -246,7 +252,10 @@ class World:
                         )
 
         self.mario.draw(self.__surface)
+
         self.debug(True)
+
+        # print("Camera: ", self.camera.position)
 
     def debug(self, is_debug) -> None:
         if is_debug:
@@ -264,8 +273,10 @@ class World:
             # for isinstance(entities, pygame.sprite.Sprite):
 
     def update(self, delta) -> None:
+        pygame.draw.rect(self.__surface, (255, 0, 0), self.camera.viewport, 1)
         self.mario.update(delta)
-        # pygame.draw.rect(world, (255, 000, 000), (0, 0, 420, 220), 1)
+        self.__surface = self.camera.zoom(self.__surface)
+        self.camera.follow_target(self.mario)
 
     def get_world_surface(self) -> pygame.Surface:
         return self.__surface
