@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import List
 import pygame
 import constants
@@ -91,12 +91,14 @@ class Animation:
         self.current_frame = 0
         self.last_update = 0
 
-    def flip(self, orientation: Orientation, sprite):
+    def flip(self, orientation: Orientation):
         match orientation:
             case Orientation.RIGHT:
-                return pygame.transform.flip(sprite, True, False)
+                for i, frame in enumerate(self.frames):
+                    self.frames[i] = pygame.transform.flip(frame, True, False)
             case Orientation.LEFT:
-                return pygame.transform.flip(sprite, True, False)
+                for i, frame in enumerate(self.frames):
+                    self.frames[i] = pygame.transform.flip(frame, True, False)
 
     def play(self):
         now = pygame.time.get_ticks()
@@ -119,24 +121,35 @@ class Mario(pygame.sprite.Sprite):
     max_speed: int = constants.SPEED
     jump_force: int = constants.JUMP_FORCE
 
-    class State(Enum):
+    class State(IntEnum):
         IDLING = 0
         RUNNING = 1
         JUMPING = 2
-        DUCKING = 3
+        TURNING = 3
+        DUCKING = 4
+        DEAD = 5
 
     def __init__(self):
         super().__init__()
         self.idle = pygame.image.load("assets/sprites/mario/idle.png").convert_alpha()
+        self.jump = pygame.image.load("assets/sprites/mario/jump.png").convert_alpha()
         self.run1 = pygame.image.load("assets/sprites/mario/run1.png").convert_alpha()
         self.run2 = pygame.image.load("assets/sprites/mario/run2.png").convert_alpha()
         self.run3 = pygame.image.load("assets/sprites/mario/run3.png").convert_alpha()
+        self.turn = pygame.image.load("assets/sprites/mario/turn.png").convert_alpha()
 
         self.__lives = 10
-        self.animation = Animation([self.idle, self.run1, self.run2, self.run3])
+        self.state = self.State.IDLING
 
-        self.sprite = self.animation.get_current_frame()
-        self.hitbox = self.animation.get_current_frame().get_rect()
+        self.idle_anim = Animation([self.idle])
+        self.run_anim = Animation([self.run1, self.run2, self.run3])
+        self.jump_anim = Animation([self.jump])
+        self.turn_anim = Animation([self.turn])
+
+        self.animation = [self.idle_anim, self.run_anim, self.jump_anim, self.turn_anim]
+
+        self.sprite = self.idle_anim.get_current_frame()
+        self.hitbox = self.idle_anim.get_current_frame().get_rect()
 
         self.position: Vector2 = Vector2(
             constants.TILE_WIDTH * 2, constants.TILE_HEIGHT * 11
@@ -150,8 +163,11 @@ class Mario(pygame.sprite.Sprite):
 
         self.last_orientation = Orientation.RIGHT
 
+    def die(self) -> None:
+        pass
+
     def draw(self, surface) -> None:
-        self.animation.draw(surface, self.hitbox)
+        self.animation[self.state].draw(surface, self.hitbox)
 
     def grow(self) -> None:
         pass
@@ -160,24 +176,34 @@ class Mario(pygame.sprite.Sprite):
         keys = pygame.key.get_pressed()
 
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            if self.last_orientation != Orientation.LEFT:
-                self.sprite = self.animation.flip(Orientation.LEFT, self.sprite)
-                self.last_orientation = Orientation.LEFT
-
-            self.animation.play()
+            if self.is_on_ground:
+                self.state = self.State.RUNNING
+                if self.last_orientation != Orientation.LEFT:
+                    self.run_anim.flip(Orientation.LEFT)
+                    self.last_orientation = Orientation.LEFT
+                self.run_anim.play()
 
             if self.velocity.x > -self.max_speed:
                 self.velocity -= self.acceleration
 
-        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
-            if self.last_orientation != Orientation.RIGHT:
-                self.sprite = self.animation.flip(Orientation.RIGHT, self.sprite)
-                self.last_orientation = Orientation.RIGHT
+            if self.velocity.x > 0:
+                self.state = self.State.TURNING
+                self.turn_anim.play()
 
-            self.animation.play()
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            if self.is_on_ground:
+                self.state = self.State.RUNNING
+                if self.last_orientation != Orientation.RIGHT:
+                    self.run_anim.flip(Orientation.LEFT)
+                    self.last_orientation = Orientation.RIGHT
+                self.run_anim.play()
 
             if self.velocity.x < self.max_speed:
                 self.velocity += self.acceleration
+
+            if self.velocity.x < 0:
+                self.state = self.State.TURNING
+                self.turn_anim.play()
         else:
             if self.velocity.x > 0:
                 self.velocity -= self.acceleration
@@ -185,22 +211,28 @@ class Mario(pygame.sprite.Sprite):
                 self.velocity += self.acceleration
             else:
                 self.velocity.x = 0
-
-        if self.velocity.x > 100:
-            self.animation.frame_duration = 25
-        elif self.velocity.x > 50:
-            self.animation.frame_duration = 50
-        elif self.velocity.x > 0:
-            self.animation.frame_duration = 100
+                if self.is_on_ground:
+                    self.state = self.State.IDLING
+                    self.idle_anim.play()
 
         if (keys[pygame.K_UP] or keys[pygame.K_w]) and self.is_on_ground:
             self.velocity.y = -self.jump_force
             self.is_on_ground = False
             self.is_jump = True
+            self.state = self.State.JUMPING
+            self.jump_anim.play()
 
         if (keys[pygame.K_DOWN] or keys[pygame.K_s]) and self.is_grown:
             # TODO when mario is grown, he can now duck
+            self.state = self.State.DUCKING
             pass
+
+        if self.velocity.x > 100:
+            self.run_anim.frame_duration = 25
+        elif self.velocity.x > 50:
+            self.run_anim.frame_duration = 50
+        elif self.velocity.x > 0:
+            self.run_anim.frame_duration = 100
 
         self.position.x += self.velocity.x * delta
         self.position.y += self.velocity.y * delta
@@ -211,6 +243,7 @@ class Mario(pygame.sprite.Sprite):
         self.hitbox.topleft = (int(self.position.x), int(self.position.y))
 
         # print(self.velocity)
+        print(self.state)
 
 
 class World:
